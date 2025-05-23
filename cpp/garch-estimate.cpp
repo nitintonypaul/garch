@@ -22,7 +22,7 @@ double expected_volatility;
 //Estimating volatility
 double estimate_volatility(int no_of_days, double past_vol, const std::vector<double> &shock_array) {
 
-    //Arguments to be recieved
+    //Assigning global variables
     days = no_of_days;
     vol = past_vol;
 
