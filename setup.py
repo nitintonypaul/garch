@@ -11,7 +11,7 @@ ext_modules = [
 ]
 
 setup(
-    name="garch-est",
+    name="garch_est",
     version="0.0.1",
     ext_modules=ext_modules,
 )
