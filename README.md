@@ -1,2 +1,4 @@
-# garch
-Generalized AutoRegressive Conditional Heteroskedasticity (1,1) model
+# GARCH
+Generalized AutoRegressive Conditional Heteroskedasticity (1,1) model. Built from scratch.
+
+Documentation coming soon.
