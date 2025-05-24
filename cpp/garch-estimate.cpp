@@ -31,9 +31,9 @@ double estimate_volatility(int no_of_days, double past_vol, const std::vector<do
     double a = 0.1;
     double b = 0.8;
 
-    //Step values
+    //Step value and learning rate
     double learning_rate = 0.001;
-    double step = 0.00001;
+    double step = 1e-5;
 
     //Optimisation loop
     for (int i = 0; i < 1000; i++) {
@@ -41,48 +41,38 @@ double estimate_volatility(int no_of_days, double past_vol, const std::vector<do
         //Computing base likelihood
         double likelihood = L(a, b, w,shock_array);
 
+        //Defining different step size of Omega
+        double step_w = std::max(w * 1e-3, 1e-6);
+
         //Computing shifted likelihoods
         double L_a = L(a+step, b, w, shock_array);
         double L_b = L(a, b+step, w, shock_array);
-        double L_w = L(a, b, w+step, shock_array);
-
-        //Obtaining compared result for readibility (1 for true, 0 for false)
-        int a_shift = L_a > likelihood;
-        int b_shift = L_b > likelihood;
-        int w_shift = L_w > likelihood;
+        double L_w = L(a, b, w+step_w, shock_array);
 
         //Computing partial derivatives
         double da = (L_a - likelihood) / step;
         double db = (L_b - likelihood) / step;
-        double dw = (L_w - likelihood) / step;
+        double dw = (L_w - likelihood) / step_w;
+
 
         //Computing potential shift
         double potential_shift_a = learning_rate * da;
         double potential_shift_b = learning_rate * db;
         double potential_shift_w = learning_rate * dw;
 
-        //Optimizing alpha with contraint
-        if (a_shift && a+potential_shift_a >= 0) {
+        //Optimizing alpha with constraint
+        if (a+potential_shift_a >= 0) {
             a += potential_shift_a;
         }
-        else if (!a_shift && a+potential_shift_a >= 0){
-            a -= potential_shift_a;
-        }
 
-        //Optimizing beta with contraint
-        if (b_shift && b+potential_shift_b >= 0) {
+        //Optimizing beta with constraint
+        if (b+potential_shift_b >= 0) {
             b += potential_shift_b;
         }
-        else if (!b_shift && b+potential_shift_b >= 0){
-            b -= potential_shift_b;
-        }
 
-        //Optimizing Omega with contraint
-        if (w_shift && w+potential_shift_w >= 0) {
+        //Optimizing Omega with constraint
+        if (w+potential_shift_w >= 0) {
             w += potential_shift_w;
-        }
-        else if (!w_shift && w+potential_shift_w >= 0){
-            w -= potential_shift_w;
         }
 
         //Scaling constraint (alpha + beta must be less than 1)
@@ -95,7 +85,7 @@ double estimate_volatility(int no_of_days, double past_vol, const std::vector<do
         }
 
         //Upper bound parameter for omega to avoid drifting off to INFINITY
-        if (w > 0.00001) w = 0.00001;
+        if (w > 0.0001) w = 0.0001;
 
         //Convergence check (To break if result is minimal and uneffective)
         if (abs(da) + abs(db) + abs(dw) < 1e-8) break;
@@ -125,11 +115,14 @@ double L(double a, double b, double w, const std::vector<double> &arr) {
         prev_variance = sig_t_square;
     }
 
-    //Changing global variable to expected variance for easier computation
-    expected_volatility = std::sqrt(prev_variance);
+    //Computing final variance
+    double variance = w + (a * std::pow(arr[days-1],2)) + (b * prev_variance);
+
+    //Changing global variable to expected volatility for easier access
+    expected_volatility = std::sqrt(variance);
 
     //Returning total likelihood
-    return total_likelihood;
+    return total_likelihood/ days;
 }
 
 
