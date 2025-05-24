@@ -121,8 +121,8 @@ double L(double a, double b, double w, const std::vector<double> &arr) {
     //Changing global variable to expected volatility for easier access
     expected_volatility = std::sqrt(variance);
 
-    //Returning total likelihood
-    return total_likelihood/ days;
+    //Returning total likelihood upon days to shorten the gap and smoothen optimization
+    return total_likelihood / days;
 }
 
 
