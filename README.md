@@ -30,7 +30,15 @@ Where:
 
 - $$\sigma_t^2$$: The conditional variance at time t. This is our forecast for the variance of the next period's returns.
 - $$\omega$$: A constant term, representing the long-run average variance. This parameter must be positive ($$\omega > 0$$).
-- $$\epsilon_{t-1}^2$$: The squared residual (or error) from the previous period ($$t − 1$$). It represents the impact of past "shocks" on current volatility.
+- $$\epsilon_{t-1}^2$$: The squared residual (or error) from the previous period ($$t − 1$$). It represents the impact of past "shocks" on current volatility. $$\epsilon_{t-1}$$ can be computed from
+
+$$
+r_t = \mu + \epsilon_{t-1}
+$$
+
+$$r_t$$ = return on day $$t$$ <br>
+$$\mu$$ = average expected return per day
+
 - $$\sigma_{t-1}^2$$: The conditional variance from the previous period ($$t − 1$$). It signifies the persistence of volatility from the past.
 - $$\alpha$$: The coefficient for the ARCH term. It captures the impact of new information (shocks) on volatility. This parameter must be non-negative ($$\alpha \ge 0$$).
 - $$\beta$$: The coefficient for the GARCH term. It measures the persistence of volatility, indicating how much past volatility influences current volatility. This parameter must be non-negative ($$\beta \ge 0$$).
