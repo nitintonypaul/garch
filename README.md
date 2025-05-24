@@ -43,7 +43,7 @@ $$\mu$$ = average expected return per day
 - $$\alpha$$: The coefficient for the ARCH term. It captures the impact of new information (shocks) on volatility. This parameter must be non-negative ($$\alpha \ge 0$$).
 - $$\beta$$: The coefficient for the GARCH term. It measures the persistence of volatility, indicating how much past volatility influences current volatility. This parameter must be non-negative ($$\beta \ge 0$$).
 
-For stationarity of the variance process, the sum of the ARCH and GARCH coefficients must be less than one: $$\alpha + \beta < 1$$. This condition ensures that the impact of past shocks eventually diminishes, and the volatility process reverts to its long-run average.
+For stationarity of the variance process, the sum of the ARCH and GARCH coefficients must be less than one: ($$\alpha + \beta < 1$$). This condition ensures that the impact of past shocks eventually diminishes, and the volatility process reverts to its long-run average.
 
 The parameters $$\omega$$, $$\alpha$$ and $$\beta$$ are estimated using an optimization technique, typically by maximizing a likelihood function (e.g., assuming normally distributed errors) or minimizing errors.
 
