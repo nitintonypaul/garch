@@ -1,94 +1,243 @@
-# GARCH(1,1) Volatility Estimation from Scratch
+# GARCH(1,1) Volatility Estimation with Gradient Ascent
+
 This documentation outlines the development of a GARCH(1,1) (Generalized Autoregressive Conditional Heteroskedasticity) model, built entirely from the ground up. This project demonstrates a comprehensive understanding of financial time series modeling, numerical optimization, and the integration of Python with high-performance C++ code using pybind11.
 
 ---
 
-## What is GARCH?
-In financial markets, volatility (the degree of variation of a trading price series over time) is not constant. Periods of high volatility tend to be followed by periods of high volatility, and similarly for low volatility. This phenomenon is known as volatility clustering. Traditional models, like simple moving averages, struggle to capture this dynamic behavior.
+## 1. Project Overview
 
-The GARCH model (Generalized Autoregressive Conditional Heteroskedasticity), introduced by Bollerslev (1986) as an extension of Engle's (1982) ARCH model, is a statistical model used to forecast the future variance (or volatility) of a time series. It's particularly powerful in finance because it explicitly accounts for volatility clustering, making it a cornerstone for risk management, option pricing, and portfolio optimization.
-
-A GARCH(p,q) model uses past squared residuals (ARCH terms) and past conditional variances (GARCH terms) to predict the current conditional variance. For this project, we focus on the GARCH(1,1) model, which is the most commonly used and often sufficient for many financial applications.
+This project presents a C++ implementation of the **Generalized Autoregressive Conditional Heteroskedasticity (GARCH) (1,1) model** for estimating financial market volatility. Utilizing a **Maximum Likelihood Estimation (MLE)** approach, the model parameters are optimized through an iterative **Gradient Ascent** algorithm. The core functionality is encapsulated within a C++ script, with seamless integration provided by `pybind11`, allowing the volatility estimation function to be called and utilized from Python. This project demonstrates a strong understanding of quantitative financial modeling, numerical optimization techniques, and C++ programming with Python interoperability.
 
 ---
+## 2. Introduction to Volatility and GARCH Models
 
-## GARCH(1,1) Mathematics
-The GARCH(1,1) model specifies the conditional variance, $$\sigma_t^2$$, as a function of three terms:
+### What is Volatility?
 
-1. A long-run average variance (constant term, $$\omega$$)
-2. The squared residual from the previous period (ARCH term, $$\alpha$$)
-3. The conditional variance from the previous period (GARCH term, $$\beta$$)
+In finance, **volatility** is a crucial measure of the dispersion of returns for a given security or market index. It quantifies the degree of variation of a trading price series over time, often expressed as the standard deviation of returns. High volatility implies greater risk, as prices can fluctuate drastically, while low volatility suggests more stable prices. Accurate volatility forecasting is essential for:
+* **Risk Management:** Quantifying potential losses in portfolios.
+* **Option Pricing:** Volatility is a key input in models like Black-Scholes.
+* **Portfolio Optimization:** Allocating assets based on their risk-return profiles.
 
+Traditional methods of measuring volatility, such as calculating the historical standard deviation over a fixed window, often fall short because financial market volatility is not constant over time. It exhibits phenomena like **volatility clustering**, where large price changes tend to be followed by large price changes (of either sign), and small changes tend to be followed by small changes. This suggests that volatility itself is time-varying.
 
-The equation for the GARCH(1,1) conditional variance is:
+### Introduction to GARCH(1,1)
+
+To address the time-varying nature of financial volatility, **Generalized Autoregressive Conditional Heteroskedasticity (GARCH)** models were introduced. These models capture the observation that the conditional variance (the variance of future returns, conditional on past information) changes over time.
+
+The **GARCH(1,1) model** is one of the most widely used specifications, representing the conditional variance ($\sigma_t^2$) as a function of past squared residuals (shocks) and past conditional variances. The core equation for the GARCH(1,1) model is:
 
 $$
 \sigma_t^2 = \omega + \alpha \epsilon_{t-1}^2 + \beta \sigma_{t-1}^2
 $$
 
 Where:
+* $\sigma_t^2$: The conditional variance at time $t$. This is the variance of the returns for the upcoming period, estimated using information available up to time $t-1$.
+* $\epsilon_{t-1}^2$: The squared return (or "shock") at time $t-1$. This term captures the impact of past market movements on current volatility.
+* $\sigma_{t-1}^2$: The conditional variance at time $t-1$. This term accounts for the persistence of volatility, meaning that high (or low) volatility tends to be followed by high (or low) volatility.
+* $\omega$: A constant term, representing the long-run average variance or the unconditional variance component. It ensures that the conditional variance is always positive.
+* $\alpha$: The ARCH coefficient, which measures the extent to which volatility reacts to market shocks ($\epsilon_{t-1}^2$). A higher $\alpha$ means a greater impact of past squared returns on current variance.
+* $\beta$: The GARCH coefficient, which measures the persistence of volatility, i.e., how much previous conditional variance influences the current conditional variance. A higher $\beta$ indicates that volatility takes longer to revert to its long-run mean.
 
-- $$\sigma_t^2$$: The conditional variance at time t. This is our forecast for the variance of the next period's returns.
-- $$\omega$$: A constant term, representing the long-run average variance. This parameter must be positive ($$\omega > 0$$).
-- $$\epsilon_{t-1}^2$$: The squared residual (or error) from the previous period ($$t − 1$$). It represents the impact of past "shocks" on current volatility. $$\epsilon_{t}$$ can be computed from
+### Constraints on Parameters
 
-$$
-r_t = \mu + \epsilon_{t}
-$$
-
-$$r_t$$ = return on day $$t$$ <br>
-$$\mu$$ = average expected return per day
-
-- $$\sigma_{t-1}^2$$: The conditional variance from the previous period ($$t − 1$$). It signifies the persistence of volatility from the past.
-- $$\alpha$$: The coefficient for the ARCH term. It captures the impact of new information (shocks) on volatility. This parameter must be non-negative ($$\alpha \ge 0$$).
-- $$\beta$$: The coefficient for the GARCH term. It measures the persistence of volatility, indicating how much past volatility influences current volatility. This parameter must be non-negative ($$\beta \ge 0$$).
-
-For stationarity of the variance process, the sum of the ARCH and GARCH coefficients must be less than one: ($$\alpha + \beta < 1$$). This condition ensures that the impact of past shocks eventually diminishes, and the volatility process reverts to its long-run average.
-
-The parameters $$\omega$$, $$\alpha$$ and $$\beta$$ are estimated using an optimization technique, typically by maximizing a likelihood function (e.g., assuming normally distributed errors) or minimizing errors.
+For the GARCH(1,1) model to be meaningful and stable (stationarity), the following constraints are typically imposed on its parameters:
+* $\omega > 0$: The constant term must be positive to ensure that the long-run variance is positive.
+* $\alpha \ge 0$: The coefficient for past shocks must be non-negative.
+* $\beta \ge 0$: The coefficient for past variance must be non-negative.
+* $\alpha + \beta < 1$: This crucial constraint ensures the **stationarity** of the GARCH process, meaning that the impact of past shocks eventually decays, and volatility reverts to a finite long-run average. If $\alpha + \beta \ge 1$, volatility could explode to infinity.
 
 ---
 
-## Process of Implementation
-Building this **GARCH(1,1)** model involved several key steps, all implemented without relying on pre-built econometric libraries for the core estimation, thus showcasing a deep understanding of each component.
+## 3. Parameter Estimation: Maximum Likelihood and Gradient Ascent
 
-### 1. Data Acquisition and Preparation
-- `yfinance`: Stock price data (e.g., daily closing prices) was fetched using the yfinance library. This provides a convenient way to access historical market data.
-- `NumPy`: Once fetched, the raw price data was processed using NumPy. This involved:
-  - Calculating logarithmic returns, as financial models often operate on returns rather than raw prices.
-  - Handling any missing data points and ensuring the data was in a suitable format for the subsequent optimization process.
+### The Challenge of Parameter Estimation
 
-### 2. Custom Gradient Ascent Optimization
-This is where the "from scratch" aspect truly shines. Instead of using established optimization libraries (like SciPy's optimizers), the parameters ($$\omega$$, $$\alpha$$, $$\beta$$) of the GARCH(1,1) model were estimated using a manual implementation of **Gradient Ascent**.
+The parameters of the GARCH(1,1) model ($\omega, \alpha, \beta$) are not directly observable. Instead, they must be estimated from historical data (e.g., a time series of financial returns). The goal of estimation is to find the set of parameters that best explains the observed data.
 
-**Objective:** The goal of the optimization is to find the parameters that maximize the log-likelihood function of the GARCH(1,1) model, assuming normally distributed errors. Gradient Ascent works by iteratively adjusting the parameters in the direction of the steepest ascent of the likelihood function.
+### Maximum Likelihood Estimation (MLE)
 
-**Manual Implementation:**
-- The log-likelihood function for the GARCH(1,1) model was explicitly defined. Which is:
+**Maximum Likelihood Estimation (MLE)** is a powerful statistical method for estimating the parameters of a probability distribution. The principle behind MLE is to find the parameter values that maximize the likelihood of observing the given sample data. In the context of GARCH, we seek parameters that maximize the probability of the observed time series of returns, given the GARCH model.
+
+Assuming that the financial shocks (or standardized residuals) $\epsilon_t$ are independently and identically distributed (i.i.d.) and follow a normal distribution with mean zero and conditional variance $\sigma_t^2$, i.e., $\epsilon_t \sim N(0, \sigma_t^2)$, the probability density function (PDF) for a single observation $\epsilon_t$ is:
 
 $$
-L(\omega, \alpha, \beta) = -\frac{1}{2} \sum_{t=1}^{T} \left[ \log(2\pi) + \log(\sigma_t^2) + \frac{\epsilon_t^2}{\sigma_t^2} \right]
+f(\epsilon_t; \omega, \alpha, \beta, \sigma_{t-1}^2) = \frac{1}{\sqrt{2\pi\sigma_t^2}} \exp\left(-\frac{\epsilon_t^2}{2\sigma_t^2}\right)
 $$
 
-- The gradients (partial derivatives) of the log-likelihood function with respect to each parameter ($\omega$, $\alpha$, $\beta$) were **derived analytically**. The initial guesses for the parameters themselves were set to heuristical values to begin the iterative gradient ascent optimization process.
-- An iterative loop was set up where, in each step, the parameters were updated by moving a small step (determined by a learning rate) in the direction of the calculated gradients.
-- **Acknowledgement of Imperfection**: It's important to note that this manual Gradient Ascent implementation is not perfectly optimized or robust compared to highly sophisticated, industrial-grade optimization algorithms found in specialized libraries. It serves to demonstrate a foundational understanding of numerical optimization principles and the ability to implement them from first principles.
+For a series of $T$ observations, the **likelihood function** $L$ is the product of the individual probability densities:
 
-### 3. C++ for Performance with pybind11 Integration
-To achieve better performance for the computationally intensive parts of the model (especially the iterative calculation of conditional variances and gradients), the core GARCH estimation logic and the Gradient Ascent algorithm were implemented in C++.
+$$
+L(\omega, \alpha, \beta | \epsilon_1, \dots, \epsilon_T) = \prod_{t=1}^{T} \frac{1}{\sqrt{2\pi\sigma_t^2}} \exp\left(-\frac{\epsilon_t^2}{2\sigma_t^2}\right)
+$$
 
-- `pybind11`: This powerful library was used to create seamless bindings between the Python frontend and the C++ backend. pybind11 allows Python code to call C++ functions and classes directly, enabling the benefits of C++'s speed while retaining Python's ease of use for data handling and scripting.
+To simplify calculations and avoid numerical underflow (due to multiplying many small probabilities), it is common practice to maximize the **log-likelihood function** instead. Since the logarithm is a monotonically increasing function, maximizing the log-likelihood is equivalent to maximizing the likelihood. Taking the natural logarithm of the likelihood function yields:
 
-- **Workflow:**
-  - Python (`yfinance`, `NumPy`) handles data fetching and initial preparation.
-  - The prepared data is passed to the C++ module via pybind11.
-  - The C++ module performs the heavy lifting: calculating conditional variances, the log-likelihood, and executing the custom Gradient Ascent optimization to find the optimal GARCH parameters.
-  - The estimated parameters and other relevant outputs are returned to Python for further analysis or presentation.
+$$
+\text{log}L(\omega, \alpha, \beta) = \sum_{t=1}^{T} \left[ -\frac{1}{2} \log(2\pi) - \frac{1}{2} \log(\sigma_t^2) - \frac{\epsilon_t^2}{2\sigma_t^2} \right]
+$$
+
+This is the function that the `L` function in the C++ code aims to compute and optimize.
+
+### Gradient Ascent for Optimization
+
+Direct analytical solutions for maximizing the log-likelihood function for GARCH models are generally not feasible due to the complex, non-linear relationship between the parameters and the likelihood. Therefore, iterative numerical optimization algorithms are employed.
+
+**Gradient Ascent** is an iterative optimization algorithm used to find the maximum of a function. It works by taking steps proportional to the positive gradient of the function at the current point. The magnitude of the step is determined by the learning rate. For our GARCH parameter estimation, the update rule for a parameter $\theta$ (which can be $\omega$, $\alpha$, or $\beta$) at iteration $k+1$ is:
+
+$$
+\theta_{k+1} = \theta_k + \text{learning\_rate} \times \frac{\partial \text{log}L}{\partial \theta_k}
+$$
+
+Where $\frac{\partial \text{log}L}{\partial \theta_k}$ is the partial derivative (gradient) of the log-likelihood function with respect to the parameter $\theta$ at the current values. These partial derivatives indicate the direction of the steepest ascent on the log-likelihood surface.
+
+In this implementation, the partial derivatives are approximated numerically using a small step size:
+
+$$
+\frac{\partial \text{log}L}{\partial \theta} \approx \frac{\text{log}L(\theta + \text{step}) - \text{log}L(\theta)}{\text{step}}
+$$
+
+The optimization process iteratively adjusts $\omega$, $\alpha$, and $\beta$ in the direction that increases the log-likelihood, subject to the necessary constraints, until convergence is reached or a maximum number of iterations is performed.
+
+The **learning rate** controls the size of the steps taken during optimization. A small learning rate leads to slow convergence but can be more stable, while a large learning rate can lead to faster convergence but risks overshooting the maximum or oscillating. The **step size** used in approximating the partial derivatives influences the accuracy of the gradient calculation.
+
+Crucially, throughout the optimization, the parameters are constrained to satisfy the conditions for a valid GARCH(1,1) model: $\omega > 0, \alpha \ge 0, \beta \ge 0$, and $\alpha + \beta < 1$. These constraints are handled within the `estimate_volatility` function's optimization loop.
+
+---
+## 4. C++ Implementation Details
+
+The GARCH(1,1) volatility estimation is implemented through two core C++ functions: `estimate_volatility` for optimization and `L` for log-likelihood calculation. `Pybind11` integrates this C++ functionality with Python.
+
+```cpp
+// Common headers and Pybind11 setup
+#define _USE_MATH_DEFINES
+#include <iostream>
+#include <cmath>
+#include <vector>
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+
+namespace py = pybind11;
+
+// Function declarations and global variables
+double estimate_volatility(int no_of_days, double past_vol, const std::vector<double> &shock_array);
+double L(double a, double b, double w, const std::vector<double> &arr);
+
+int days;
+double vol;
+double expected_volatility;
+```
+
+### 4.1. `L` (Log-Likelihood) Function
+
+This function calculates the log-likelihood of the observed `shock_array` for given GARCH parameters ($\alpha, \beta, \omega$). It directly implements the GARCH(1,1) equation and the log-likelihood formula.
+
+```cpp
+// Log-Likelihood Function for GARCH(1,1) Model
+double L(double a, double b, double w, const std::vector<double> &arr) {
+    double prev_variance = vol * vol;
+    double total_likelihood = 0.000;
+    double tiny_eps = 0.0000000001; // For numerical stability
+
+    for (int i = 1; i < days; i++) {
+        // GARCH(1,1) conditional variance equation: sigma_t^2 = omega + alpha * epsilon_{t-1}^2 + beta * sigma_{t-1}^2
+        double sig_t_square = w + (a * std::pow(arr[i-1], 2)) + (b * prev_variance);
+        total_likelihood += -0.5 * (std::log(2 * M_PI) + std::log(sig_t_square + tiny_eps) + (std::pow(arr[i], 2) / sig_t_square));
+        prev_variance = sig_t_square;
+    }
+    double variance = w + (a * std::pow(arr[days-1], 2)) + (b * prev_variance);
+    expected_volatility = std::sqrt(variance);
+    return total_likelihood / days; // Return average for smoother optimization
+}
+```
+
+**Key Points:**
+* Implements the **GARCH(1,1) conditional variance equation** and the log-likelihood summation.
+* Uses `tiny_eps` to prevent `log(0)` for numerical stability.
+* Calculates the next period's expected volatility and updates a global variable.
+
+### 4.2. `estimate_volatility` Function
+
+This function performs **Gradient Ascent** to find the optimal GARCH parameters ($\omega, \alpha, \beta$) that maximize the log-likelihood. It iteratively adjusts parameters while enforcing model constraints.
+
+```cpp
+// Volatility Estimation Function (Gradient Ascent Optimization)
+double estimate_volatility(int no_of_days, double past_vol, const std::vector<double> &shock_array) {
+    days = no_of_days;
+    vol = past_vol;
+
+    // Initial parameter guesses and optimization hyperparameters
+    double w = 0.000001; double a = 0.1; double b = 0.8;
+    double learning_rate = 0.001;
+    double step = 1e-5;
+
+    for (int i = 0; i < 1000; i++) {
+        double likelihood = L(a, b, w, shock_array);
+        double step_w = std::max(w * 1e-3, 1e-6); // Adaptive step for omega
+
+        // Numerical approximation of gradients
+        double da = (L(a + step, b, w, shock_array) - likelihood) / step;
+        double db = (L(a, b + step, w, shock_array) - likelihood) / step;
+        double dw = (L(a, b, w + step_w, shock_array) - likelihood) / step_w;
+
+        // Parameter updates applying non-negativity constraints
+        if (a + learning_rate * da >= 0) a += learning_rate * da;
+        if (b + learning_rate * db >= 0) b += learning_rate * db;
+        if (w + learning_rate * dw >= 0) w += learning_rate * dw;
+
+        // Stationarity constraint: alpha + beta < 1
+        if (a + b >= 1) {
+            double scale = 0.99 / (a + b);
+            a *= scale;
+            b *= scale;
+        }
+        if (w > 0.0001) w = 0.0001; // Upper bound for omega
+
+        if (abs(da) + abs(db) + abs(dw) < 1e-8) break; // Convergence check
+    }
+    L(a, b, w, shock_array); // Final calculation for expected_volatility
+    return expected_volatility;
+}
+```
+
+**Key Points:**
+* Implements an iterative **Gradient Ascent** to maximize the log-likelihood.
+* Numerically approximates gradients for `w`, `a`, `b`.
+* Enforces critical GARCH parameter constraints: non-negativity ($\omega, \alpha, \beta \ge 0$) and **stationarity** ($\alpha + \beta < 1$).
+* Includes practical safeguards like an upper bound for $\omega$ and a convergence check.
+
+### 4.3. Pybind11 Integration
+
+`pybind11` provides a clean interface to expose the C++ `estimate_volatility` function to Python, enabling easy scripting and data analysis.
+
+```cpp
+// Pybind11 Module Definition
+PYBIND11_MODULE(garch_est, m) {
+    m.def("estimate_vol", &estimate_volatility, "Estimates GARCH(1,1) volatility.");
+}
+```
+
+**Key Points:**
+* Defines the Python module `garch_est`.
+* Exposes `estimate_volatility` as `estimate_vol` in Python, complete with a docstring.
+
+---
+
+## 5. Opportunities for Improvement
+
+While this project successfully demonstrates the core mechanics of GARCH(1,1) volatility estimation, several enhancements could be considered for a production-grade system or a more comprehensive analysis:
+
+* **Robust Optimization Algorithms:** While Gradient Ascent is effective for demonstration, more sophisticated optimization algorithms like BFGS (Broyden–Fletcher–Goldfarb–Shanno) or Nelder-Mead could offer faster convergence and better handling of complex likelihood surfaces.
+* **Error Handling and Input Validation:** Implementing robust error handling (e.g., for empty `shock_array`, non-positive `past_vol`, or non-convergence) and comprehensive input validation would make the function more resilient and user-friendly.
+* **Model Diagnostics:** Incorporating statistical tests (e.g., Ljung-Box test on standardized residuals, ARCH-LM test) to check for remaining autocorrelation or heteroskedasticity in the residuals would allow for proper model validation.
+* **Alternative GARCH Specifications:** Extending the model to other GARCH family variants (e.g., GARCH(p,q), EGARCH, GJR-GARCH) could capture asymmetric responses to positive vs. negative shocks.
+* **Performance Optimization:** For extremely large datasets, techniques like vectorization, parallel processing, or using specialized numerical libraries could significantly improve computation speed.
+* **Configuration and Hyperparameters:** Externalizing hyperparameters (learning rate, step size, max iterations) instead of hardcoding them would allow for easier experimentation and tuning.
+* **Comprehensive Testing:** Developing a suite of unit and integration tests would ensure the correctness and reliability of the implementation under various scenarios.
 
 ---
 
 ## Demo
-This demo represents a working snapshot of the program's capabilities, current as of May 2025. All resulting values are in Percentage (%).
+This demo showcases the program's current capabilities, reflecting its state as of May 2025. All reported volatility values are non-annualized GARCH outputs, expressed in percentages (%). Please note these may differ from Implied Volatility (IV) values.
 
 ```
 #Test GME (GameStop)
