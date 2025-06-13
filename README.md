@@ -85,7 +85,7 @@ Direct analytical solutions for maximizing the log-likelihood function for GARCH
 **Gradient Ascent** is an iterative optimization algorithm used to find the maximum of a function. It works by taking steps proportional to the positive gradient of the function at the current point. The magnitude of the step is determined by the learning rate. For our GARCH parameter estimation, the update rule for a parameter $\theta$ (which can be $\omega$, $\alpha$, or $\beta$) at iteration $k+1$ is:
 
 $$
-\theta_{k+1} = \theta_k + \text{learning\_rate} \times \frac{\partial \text{log}L}{\partial \theta_k}
+\theta_{k+1} = \theta_k + \text{learning rate} \times \frac{\partial \text{log}L}{\partial \theta_k}
 $$
 
 Where $\frac{\partial \text{log}L}{\partial \theta_k}$ is the partial derivative (gradient) of the log-likelihood function with respect to the parameter $\theta$ at the current values. These partial derivatives indicate the direction of the steepest ascent on the log-likelihood surface.
